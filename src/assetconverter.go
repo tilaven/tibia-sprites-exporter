@@ -1,8 +1,11 @@
 package main
 
 import (
+	"bufio"
 	"bytes"
 	"fmt"
+	"image"
+	"image/draw"
 	"image/png"
 	"io"
 	"os"
@@ -13,151 +16,94 @@ import (
 	"golang.org/x/image/bmp"
 )
 
-// convertAsset - builds "<assetsPath><file>.lzma"
-// - skips the CIP header (leading 0x00 bytes, then 4 bytes, then 7-bit int size field)
-// - reads 5-byte LZMA properties + 8-byte (bogus) size, replaces size with unknown (all 0xFF)
-// - LZMA-decodes the remaining bytes
-// - treats the result as BMP and writes "Sprites <firstID>-<lastID>.png" to dumpToPath.
-func convertAsset(assetsPath string, outputPath string, compressedFilename string, firstID int, lastID int) error {
-	filePath := filepath.Join(assetsPath, compressedFilename)
-	if _, err := os.Stat(filePath); err != nil {
+// convertAsset:
+//  1. open "<assetsPath>/<compressedFilename>"
+//  2. skip CIP header (leading 0x00s, 4-byte constant, 7-bit length)
+//  3. repair LZMA "alone" header (props + unknown size) and decode
+//  4. decode BMP
+//  5. write PNG as "Sprites-<firstID>-<lastID>.png" into outputPath
+func convertAsset(assetsPath, outputPath, compressedFilename string, firstID, lastID int) error {
+	inPath := filepath.Join(assetsPath, compressedFilename)
+
+	f, err := os.Open(inPath)
+	if err != nil {
 		if os.IsNotExist(err) {
-			log.Debug().Msgf("Skipping '%s', doesn't exist!\n", compressedFilename)
+			log.Debug().Str("file", compressedFilename).Msg("skipping: file does not exist")
 			return nil
 		}
-
-		log.Err(err).Msgf("stat failed for %s: %w", filePath, err)
-		return err
-	}
-
-	log.Debug().Msgf("Dumping '%s' to 'Sprites %d-%d.png'", compressedFilename, firstID, lastID)
-
-	f, err := os.Open(filePath)
-	if err != nil {
-		log.Err(err).Msgf("open failed for %s: %w", filePath, err)
-
-		return err
+		return fmt.Errorf("open %q: %w", inPath, err)
 	}
 	defer f.Close()
 
-	// 1) Skip CIP header:
-	//    - variable number of 0x00
-	//    - then 4 bytes constant (not validated here)
-	//    - then 7-bit int (keep reading while MSB=1)
-	if err := skipCIPHeader(f); err != nil {
-		log.Err(err).Msgf("skip header failed for %s: %w", filePath, err)
+	log.Debug().
+		Str("input", compressedFilename).
+		Str("output", fmt.Sprintf("Sprites-%d-%d.png", firstID, lastID)).
+		Msg("converting")
 
-		return err
+	br := bufio.NewReaderSize(f, 1<<20) // 1MB buffer for fewer syscalls
+
+	// 1) Skip CIP header
+	if err := skipCIPHeader(br); err != nil {
+		return fmt.Errorf("skip CIP header: %w", err)
 	}
 
-	// 2) Read LZMA "alone" header parts:
-	//    - 5 bytes properties
-	//    - 8 bytes size (but CIP writes compressed size; we’ll overwrite with unknown)
-	prop := make([]byte, 5)
-	if _, err := io.ReadFull(f, prop); err != nil {
-		log.Err(err).Msgf("read lzma props: %w", err)
-
-		return err
-	}
-	// Discard the next 8 bytes (bogus size from CIP)
-	var bogusSize [8]byte
-	if _, err := io.ReadFull(f, bogusSize[:]); err != nil {
-		log.Err(err).Msgf("read bogus size: %w", err)
-
-		return err
-	}
-
-	// Prepare a corrected LZMA-alike stream:
-	// Build a header: 5-byte props + 8 bytes of 0xFF (unknown uncompressed size),
-	// then the remaining compressed bytes.
-	var lzHeader bytes.Buffer
-	lzHeader.Write(prop)
-	unknown := make([]byte, 8)
-	for i := range unknown {
-		unknown[i] = 0xFF
-	}
-	lzHeader.Write(unknown)
-
-	// MultiReader to provide a full "LZMA alone" stream to the decoder
-	lzStream := io.MultiReader(&lzHeader, f)
-
-	// 3) Decode LZMA to BMP bytes
-	lzReader, err := lzma.NewReader(lzStream)
+	// 2) Build an LZMA reader from the remaining stream (repair header)
+	lzReader, err := newLZMAReader(br)
 	if err != nil {
-		log.Err(err).Msgf("lzma reader: %w", err)
-
-		return err
+		return fmt.Errorf("lzma reader: %w", err)
 	}
+
+	// 3) LZMA→BMP bytes
 	var bmpBuf bytes.Buffer
 	if _, err := io.Copy(&bmpBuf, lzReader); err != nil {
-		log.Err(err).Msgf("lzma decode copy: %w", err)
-
-		return err
+		return fmt.Errorf("lzma decode: %w", err)
 	}
 
-	// 4) Decode BMP → image.Image
+	// 4) BMP→image.Image
 	img, err := bmp.Decode(bytes.NewReader(bmpBuf.Bytes()))
 	if err != nil {
-		log.Err(err).Msgf("bmp decode: %w", err)
-
-		return err
+		return fmt.Errorf("bmp decode: %w", err)
 	}
 
-	// 5) Save as PNG
+	// 5) Write PNG
 	outName := fmt.Sprintf("Sprites-%d-%d.png", firstID, lastID)
 	outPath := filepath.Join(outputPath, outName)
-
-	if err := os.MkdirAll(filepath.Dir(outPath), 0o755); err != nil {
-		log.Err(err).Msgf("ensure out dir: %w", err)
-
-		return err
+	if err := writePNG(outPath, img); err != nil {
+		return fmt.Errorf("write png %q: %w", outPath, err)
 	}
-	out, err := os.Create(outPath)
-	if err != nil {
-		log.Err(err).Msgf("create out file: %w", err)
 
-		return err
-	}
-	defer func() {
-		if cerr := out.Close(); cerr != nil && err == nil {
-			err = cerr
+	// Optionally split into individual sprites named by ID
+	if SplitSprites {
+		if err := splitSpriteSheet(img, firstID, lastID, outputPath); err != nil {
+			return fmt.Errorf("split sprites: %w", err)
 		}
-	}()
-
-	if err := png.Encode(out, img); err != nil {
-		log.Err(err).Msgf("png encode: %w", err)
-
-		return err
 	}
 
 	return nil
 }
 
-// replace your skipCIPHeader with this
-func skipCIPHeader(r io.Reader) error {
-	br := &byteReader{r: r}
-
-	// 1) Skip leading 0x00 bytes; consume the first non-zero byte (part of 5-byte constant)
+// skipCIPHeader consumes:
+//   - all leading 0x00 bytes
+//   - then 4 bytes (constant marker)
+//   - then a 7-bit length (continue while MSB=1)
+func skipCIPHeader(r *bufio.Reader) error {
+	// Skip leading zeros; consume first non-zero byte.
 	for {
-		b, err := br.ReadByte()
+		b, err := r.ReadByte()
 		if err != nil {
 			return err
 		}
 		if b != 0x00 {
-			// C#: while(ReadByte()==0){} -> we have CONSUMED this non-zero byte
-			break
+			break // consumed first non-zero byte (part of constant)
 		}
 	}
-
-	// 2) Skip the remaining 4 bytes of the constant
-	var tmp4 [4]byte
-	if _, err := io.ReadFull(br, tmp4[:]); err != nil {
+	// Skip remaining 4 bytes of the constant marker.
+	if _, err := io.CopyN(io.Discard, r, 4); err != nil {
 		return err
 	}
-
-	// 3) Skip the 7-bit length (read until a byte with MSB==0)
+	// Skip 7-bit length (bytes with MSB=1 mean "more").
 	for {
-		b, err := br.ReadByte()
+		b, err := r.ReadByte()
 		if err != nil {
 			return err
 		}
@@ -168,31 +114,90 @@ func skipCIPHeader(r io.Reader) error {
 	return nil
 }
 
-// Small helper to allow peeking/unreading a single byte during header parsing.
-type byteReader struct {
-	r   io.Reader
-	buf *byte // one-byte pushback buffer
-}
-
-func (br *byteReader) Read(p []byte) (int, error) {
-	if br.buf != nil && len(p) > 0 {
-		p[0] = *br.buf
-		br.buf = nil
-		if len(p) == 1 {
-			return 1, nil
-		}
-		n, err := br.r.Read(p[1:])
-		return n + 1, err
+// newLZMAReader reads the 5-byte props + bogus 8-byte size,
+// replaces size with 0xFF..FF (unknown), and returns a decoder for the rest.
+func newLZMAReader(r *bufio.Reader) (io.Reader, error) {
+	props := make([]byte, 5)
+	if _, err := io.ReadFull(r, props); err != nil {
+		return nil, fmt.Errorf("read props: %w", err)
 	}
-	return br.r.Read(p)
+	// Discard bogus size (CIP writes compressed size).
+	if _, err := io.CopyN(io.Discard, r, 8); err != nil {
+		return nil, fmt.Errorf("discard bogus size: %w", err)
+	}
+
+	// Build corrected "LZMA alone" header: props + unknown size (all 0xFF).
+	var header bytes.Buffer
+	header.Write(props)
+	header.Write(bytes.Repeat([]byte{0xFF}, 8))
+
+	stream := io.MultiReader(&header, r)
+	rd, err := lzma.NewReader(stream)
+	if err != nil {
+		return nil, err
+	}
+	return rd, nil
 }
 
-func (br *byteReader) ReadByte() (byte, error) {
-	var b [1]byte
-	_, err := br.Read(b[:])
-	return b[0], err
+func writePNG(path string, img image.Image) error {
+	if err := os.MkdirAll(filepath.Dir(path), 0o755); err != nil {
+		return err
+	}
+	out, err := os.Create(path)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	return png.Encode(out, img)
 }
 
-func (br *byteReader) unreadByte(b byte) {
-	br.buf = &b
+// splitSpriteSheet slices a 384x384 sheet into 32x32 or 64x64 tiles in
+// row-major order and writes each tile as a PNG named by its sprite ID.
+func splitSpriteSheet(img image.Image, firstID, lastID int, outputDir string) error {
+	count := lastID - firstID + 1
+	if count <= 0 {
+		return nil
+	}
+
+	b := img.Bounds()
+	width, height := b.Dx(), b.Dy()
+	if width != 384 || height != 384 {
+		// Proceed anyway, but log that size is unexpected
+		log.Debug().Int("w", width).Int("h", height).Msg("unexpected sheet size; proceeding to split")
+	}
+
+	tile := 32
+	if count <= 36 {
+		tile = 64
+	}
+
+	cols := width / tile
+	rows := height / tile
+	maxTiles := cols * rows
+	if count > maxTiles {
+		log.Warn().Int("count", count).Int("capacity", maxTiles).Msg("sprite count exceeds sheet capacity; truncating")
+		count = maxTiles
+	}
+
+	id := firstID
+	idx := 0
+	for r := 0; r < rows && idx < count; r++ {
+		for c := 0; c < cols && idx < count; c++ {
+			// Source rect in the sheet
+			sr := image.Rect(b.Min.X+c*tile, b.Min.Y+r*tile, b.Min.X+(c+1)*tile, b.Min.Y+(r+1)*tile)
+			// Copy into a new RGBA tile
+			dst := image.NewRGBA(image.Rect(0, 0, tile, tile))
+			draw.Draw(dst, dst.Bounds(), img, sr.Min, draw.Src)
+
+			outPath := filepath.Join(outputDir, "split", fmt.Sprintf("%d.png", id))
+			if err := writePNG(outPath, dst); err != nil {
+				return fmt.Errorf("write sprite %d: %w", id, err)
+			}
+
+			id++
+			idx++
+		}
+	}
+	return nil
 }

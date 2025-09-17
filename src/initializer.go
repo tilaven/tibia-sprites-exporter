@@ -15,10 +15,12 @@ var (
 	CatalogContentJsonPath     string
 	CatalogContentJsonFullPath string
 	OutputPath                 string
+	SplitSprites               bool
 	flagJsonPath               *string
 	flagOutputDir              *string
 	flagHumanOutput            *bool
 	flagDebugMode              *bool
+	flagSplitSprites           *bool
 )
 
 func initExporter() {
@@ -32,10 +34,12 @@ func initExporter() {
 	validateCatalogContentPath()
 	initOutputDir()
 	validateOutputPath()
+	initSplitOption()
 
 	log.Info().Msg("Initialized")
 	log.Debug().Msgf("catalog content path: %s", CatalogContentJsonPath)
 	log.Debug().Msgf("output path: %s", OutputPath)
+	log.Debug().Msgf("split sprites: %v", SplitSprites)
 }
 
 func initFlags() {
@@ -43,6 +47,7 @@ func initFlags() {
 	flagOutputDir = flag.String("output", "", "Where to output exported sprite files (defaults to pwd + output)")
 	flagHumanOutput = flag.Bool("human", false, "Whether pretty print the logs")
 	flagDebugMode = flag.Bool("debug", false, "Whether enable debug logs")
+	flagSplitSprites = flag.Bool("split", false, "Split each 384x384 sheet into individual sprite PNGs named by sprite ID")
 
 	flag.Parse()
 }
@@ -144,4 +149,16 @@ func sanitizeCatalogContentPath(path string) string {
 		return filepath.Dir(path)
 	}
 	return path
+}
+
+func initSplitOption() {
+	// Environment variables take precedence if present
+	if isEnvExist("TES_SPLIT") || isEnvExist("TES_SPLIT_SPRITES") {
+		SplitSprites = true
+		return
+	}
+	// Fallback to CLI flag
+	if flagSplitSprites != nil && *flagSplitSprites {
+		SplitSprites = true
+	}
 }
