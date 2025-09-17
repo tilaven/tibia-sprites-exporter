@@ -10,10 +10,11 @@ import (
 )
 
 var (
-	CatalogContentJsonPath string
-	OutputPath             string
-	flagJsonPath           *string
-	flagOutputDir          *string
+	CatalogContentJsonPath     string
+	CatalogContentJsonFullPath string
+	OutputPath                 string
+	flagJsonPath               *string
+	flagOutputDir              *string
 )
 
 func initExporter() {
@@ -35,8 +36,24 @@ func initFlags() {
 }
 
 func validateCatalogContentPath() {
-	if _, err := os.Stat(CatalogContentJsonPath); os.IsNotExist(err) {
-		log.Fatalf("[error] catalog content path does not exist: %s", CatalogContentJsonPath)
+	path := CatalogContentJsonPath
+
+	info, err := os.Stat(path)
+	if err != nil {
+		if os.IsNotExist(err) {
+			log.Fatalf("[error] path does not exist: %s", path)
+		}
+		log.Fatalf("[error] failed to stat path %s: %v", path, err)
+	}
+
+	if info.IsDir() {
+		// If it's a directory, append the file name
+		path = filepath.Join(path, "catalog-content.json")
+		if _, err := os.Stat(path); os.IsNotExist(err) {
+			log.Fatalf("[error] catalog-content.json not found in directory: %s", CatalogContentJsonPath)
+		}
+
+		CatalogContentJsonFullPath = path
 	}
 }
 
