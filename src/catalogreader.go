@@ -3,9 +3,9 @@ package main
 import (
 	"bufio"
 	"encoding/json"
-	"fmt"
-	"log"
 	"os"
+
+	"github.com/rs/zerolog/log"
 )
 
 func readCatalogContent(in string) {
@@ -13,7 +13,7 @@ func readCatalogContent(in string) {
 	var err error
 	r, err = os.Open(in)
 	if err != nil {
-		log.Fatalf("failed to open input: %v", err)
+		log.Err(err).Msgf("failed to open input: %v", err)
 	}
 	defer r.Close()
 
@@ -21,11 +21,11 @@ func readCatalogContent(in string) {
 	// Expect a top-level array
 	tok, err := dec.Token()
 	if err != nil {
-		log.Fatalf("failed reading first token: %v", err)
+		log.Err(err).Msgf("failed reading first token: %v", err)
 	}
 	delim, ok := tok.(json.Delim)
 	if !ok || delim != '[' {
-		log.Fatalf("expected top-level JSON array")
+		log.Err(err).Msgf("expected top-level JSON array")
 	}
 
 	// Define a minimal struct so we only decode what we need.
@@ -50,15 +50,29 @@ func readCatalogContent(in string) {
 		}{}
 
 		if err := dec.Decode(&elem); err != nil {
-			log.Fatalf("decode error: %v", err)
+			log.Err(err).Msgf("decode error: %v", err)
 		}
 		if elem.Type == "sprite" && elem.File != "" {
-			fmt.Println(elem)
+			err := convertAsset(
+				CatalogContentJsonPath,
+				OutputPath,
+				elem.File,
+				elem.FirstSpriteId,
+				elem.LastSpriteId,
+			)
+			if err != nil {
+				log.Err(err).Msgf("convertAsset error: %v", err)
+			}
+
+			log.Debug().Msgf("Parsed element: %+v", elem)
+		} else {
+			log.Debug().Msgf("Skipping element: %+v", elem)
 		}
+
 	}
 
 	// Consume the closing ']'
 	if tok, err = dec.Token(); err != nil {
-		log.Fatalf("failed reading closing token: %v", err)
+		log.Err(err).Msgf("failed reading closing token: %v", err)
 	}
 }

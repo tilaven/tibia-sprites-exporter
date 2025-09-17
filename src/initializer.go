@@ -3,10 +3,12 @@ package main
 import (
 	"flag"
 	"fmt"
-	"log"
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 )
 
 var (
@@ -15,24 +17,48 @@ var (
 	OutputPath                 string
 	flagJsonPath               *string
 	flagOutputDir              *string
+	flagHumanOutput            *bool
+	flagDebugMode              *bool
 )
 
 func initExporter() {
 	initFlags()
+	initDebugMode()
+	initHumanOutput()
+
+	log.Info().Msg("Tibia Sprites Exporter initializing")
+
 	initCatalogContentPath()
 	validateCatalogContentPath()
 	initOutputDir()
 	validateOutputPath()
 
-	log.Printf("[info] catalog content path: %s", CatalogContentJsonPath)
-	log.Printf("[info] output path: %s", OutputPath)
+	log.Info().Msg("Initialized")
+	log.Debug().Msgf("catalog content path: %s", CatalogContentJsonPath)
+	log.Debug().Msgf("output path: %s", OutputPath)
 }
 
 func initFlags() {
 	flagJsonPath = flag.String("jsonPath", "", "Path to catalog-content.json file")
 	flagOutputDir = flag.String("output", "", "Where to output exported sprite files (defaults to pwd + output)")
+	flagHumanOutput = flag.Bool("human", false, "Whether pretty print the logs")
+	flagDebugMode = flag.Bool("debug", false, "Whether enable debug logs")
 
 	flag.Parse()
+}
+
+func initHumanOutput() {
+	if flagHumanOutput != nil && *flagHumanOutput {
+		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
+}
+
+func initDebugMode() {
+	if *flagDebugMode {
+		zerolog.SetGlobalLevel(zerolog.DebugLevel)
+	} else {
+		zerolog.SetGlobalLevel(zerolog.InfoLevel)
+	}
 }
 
 func validateCatalogContentPath() {
@@ -41,20 +67,22 @@ func validateCatalogContentPath() {
 	info, err := os.Stat(path)
 	if err != nil {
 		if os.IsNotExist(err) {
-			log.Fatalf("[error] path does not exist: %s", path)
+			log.Err(err).Msgf("[error] path does not exist: %s", path)
 		}
-		log.Fatalf("[error] failed to stat path %s: %v", path, err)
+		log.Err(err).Msgf("[error] failed to stat path %s: %v", path, err)
 	}
 
 	if info.IsDir() {
 		// If it's a directory, append the file name
 		path = filepath.Join(path, "catalog-content.json")
 		if _, err := os.Stat(path); os.IsNotExist(err) {
-			log.Fatalf("[error] catalog-content.json not found in directory: %s", CatalogContentJsonPath)
+			log.Err(err).Msgf("catalog-content.json not found in directory: %s", CatalogContentJsonPath)
 		}
 
 		CatalogContentJsonFullPath = path
 	}
+
+	log.Debug().Msgf("catalog content path: %s", CatalogContentJsonFullPath)
 }
 
 func initCatalogContentPath() {
@@ -77,9 +105,9 @@ func initCatalogContentPath() {
 func validateOutputPath() {
 	if _, err := os.Stat(OutputPath); os.IsNotExist(err) {
 		if err := os.MkdirAll(OutputPath, 0o755); err != nil {
-			log.Fatalf("[error] failed to create output path %s: %v", OutputPath, err)
+			log.Err(err).Msgf("failed to create output path %s: %v", OutputPath, err)
 		}
-		log.Printf("[info] created missing output path: %s", OutputPath)
+		log.Info().Msgf("created missing output path: %s", OutputPath)
 	}
 }
 
