@@ -30,22 +30,30 @@ func readCatalogContent(in string) {
 
 	// Define a minimal struct so we only decode what we need.
 	var elem struct {
-		Type string `json:"type"`
-		File string `json:"file"`
+		Type          string `json:"type"`
+		File          string `json:"file"`
+		SpriteType    int    `json:"spritetype"`
+		FirstSpriteId int    `json:"firstspriteid"`
+		LastSpriteId  int    `json:"lastspriteid"`
+		Area          int    `json:"area"`
 	}
 
 	for dec.More() {
 		// Zero the struct each iteration to avoid accidental reuse
 		elem = struct {
-			Type string `json:"type"`
-			File string `json:"file"`
+			Type          string `json:"type"`
+			File          string `json:"file"`
+			SpriteType    int    `json:"spritetype"`
+			FirstSpriteId int    `json:"firstspriteid"`
+			LastSpriteId  int    `json:"lastspriteid"`
+			Area          int    `json:"area"`
 		}{}
 
 		if err := dec.Decode(&elem); err != nil {
 			log.Fatalf("decode error: %v", err)
 		}
 		if elem.Type == "sprite" && elem.File != "" {
-			fmt.Println(elem.File)
+			fmt.Println(elem)
 		}
 	}
 
