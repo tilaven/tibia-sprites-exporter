@@ -1,12 +1,14 @@
-name: Release Build
+name: Release Build and Upload
 
 on:
   push:
     tags:
       - 'v*'
+  release:
+    types: [published]
 
 permissions:
-  contents: read
+  contents: write
 
 jobs:
   build:
@@ -44,9 +46,35 @@ jobs:
           echo "Building $BIN_NAME"
           go build -trimpath -ldflags "-s -w" -o "dist/$BIN_NAME" ./src
 
-      - name: Upload artifact
+      - name: Upload build artifact
         uses: actions/upload-artifact@v4
         with:
           name: tibia-sprites-exporter-${{ matrix.goos }}-${{ matrix.goarch }}
           path: dist/*
           if-no-files-found: error
+
+  release:
+    name: Create/Update GitHub Release and upload assets
+    needs: build
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: tibia-sprites-exporter-*
+          merge-multiple: true
+          path: artifacts
+
+      - name: Show downloaded files
+        run: ls -lah artifacts
+
+      - name: Create or update release and upload assets
+        uses: ncipollo/release-action@v1
+        with:
+          tag: ${{ github.ref_name }}
+          name: tibia-sprites-exporter ${{ github.ref_name }}
+          allowUpdates: true
+          generateReleaseNotes: true
+          artifacts: "artifacts/*"
+          replacesArtifacts: false
+          token: ${{ secrets.GITHUB_TOKEN }}
