@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/rs/zerolog"
@@ -141,10 +142,25 @@ func initCatalogContentPath() {
 		return
 	}
 
-	// todo add switch based on the OS
-	CatalogContentJsonPath = expandPath(
-		"~/Library/Application Support/CipSoft GmbH/Tibia/packages/Tibia.app/Contents/Resources/assets",
-	)
+	switch runtime.GOOS {
+	case "darwin":
+		// macOS default path
+		CatalogContentJsonPath = expandPath(
+			"~/Library/Application Support/CipSoft GmbH/Tibia/packages/Tibia.app/Contents/Resources/assets",
+		)
+	case "windows":
+		// Windows default path (example)
+		CatalogContentJsonPath = expandPath(
+			"~/AppData/Local/Tibia/packages/Tibia/assets",
+		)
+	case "linux":
+		// Linux default path
+		CatalogContentJsonPath = expandPath(
+			"~/.local/share/CipSoft GmbH/Tibia/packages/Tibia/assets",
+		)
+	default:
+		panic(fmt.Sprintf("unsupported OS: %s", runtime.GOOS))
+	}
 }
 
 func validateOutputPath() {
