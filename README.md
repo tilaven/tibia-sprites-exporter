@@ -7,8 +7,8 @@
 /_/ /___/___/  |___/\___(_)_/  
 ```
 
-A small, fast CLI utility to extract Tibia client sprite sheets into PNG files and optionally split them into 
-per-sprite PNGs named by their sprite ID.
+A small, fast, and cross-platform CLI utility to extract Tibia client sprite sheets into PNG files and optionally split 
+them into per-sprite PNGs named by their sprite ID.
 
 # What this tool does:
 - Reads Tibia's catalog-content.json (the asset catalog used by the client).
@@ -22,7 +22,7 @@ per-sprite PNGs named by their sprite ID.
 - Automated verification in CI pipelines will come.
 
 # Getting started
-- Prebuilt binaries: When a tag starting with v is pushed, GitHub Actions builds artifacts for Windows, Linux and macOS (see Releases/Actions artifacts in this repository).
+- Prebuilt binaries: When a tag starting with v is pushed, GitHub Actions builds artifacts for Windows, Linux, and macOS (see Releases/Actions artifacts in this repository).
 - Build from source:
   1) Prerequisites: Go (see go.mod for the required version) and a C toolchain is NOT required (CGO is disabled).
   2) Clone the repo and build:
@@ -55,21 +55,20 @@ tibia-sprites-exporter -debug -human
 ```
 
 Flags
-- -jsonPath string    Path to the catalog-content.json file OR its containing directory.
-- -output string      Output directory (defaults to <executable_dir>/output).
-- -human              Pretty-print logs for humans.
-- -debug              Enable debug logs.
-- -split              Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64 tiles depending on sheet content).
+- `-jsonPath` string    Path to the catalog-content.json file OR its containing directory.
+- `-output` string      Output directory (defaults to <executable_dir>/output).
+- `-human`              Pretty-print logs for humans.
+- `-debug`              Enable debug logs.
+- `-split`              Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64 tiles depending on sheet content).
 
 Environment variables (override flags)
-- TES_JSON_PATH       Same as -jsonPath.
-- TES_OUTPUT_DIR      Same as -output.
-- TES_SPLIT or TES_SPLIT_SPRITES
+- `TES_JSON_PATH`       Same as -jsonPath.
+- `TES_OUTPUT_DIR`      Same as -output.
+- `TES_SPLIT` or `TES_SPLIT_SPRITES`
 
 Defaults
-- If no -jsonPath (or TES_JSON_PATH) is provided on macOS, the tool looks under:
-  ~/Library/Application Support/CipSoft GmbH/Tibia/packages/Tibia.app/Contents/Resources/assets
-- Output defaults to a folder named output next to the executable.
+- If no `-jsonPath` (or `TES_JSON_PATH`) is provided the tool will look for catalog-content.json in the default path
+- Output defaults to a folder named output next to the executable
 
 How it works under the hood
 - Streaming JSON parser reads `catalog-content.json` for entries with `"type": "sprite"`.
