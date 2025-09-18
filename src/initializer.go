@@ -43,11 +43,51 @@ func initExporter() {
 }
 
 func initFlags() {
+	// Custom help/usage with ASCII art
+	flag.Usage = func() {
+		ascii := `
+ ______________       ___   ___
+/_  __/ __/ __/ _  __/ _ \ <  /
+ / / / _/_\ \  | |/ / // / / / 
+/_/ /___/___/  |___/\___(_)_/  `
+		fmt.Fprintln(os.Stderr, ascii)
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Tibia Sprites Exporter - extract Tibia client sprite sheets into PNG files")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Usage:")
+		fmt.Fprintln(os.Stderr, "  tibia-sprites-exporter [flags]")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Flags:")
+		fmt.Fprintln(os.Stderr, "  -jsonPath string   Path to the catalog-content.json file OR its containing directory")
+		fmt.Fprintln(os.Stderr, "  -output string     Output directory (defaults to <executable_dir>/output)")
+		fmt.Fprintln(os.Stderr, "  -human             Pretty-print logs for humans")
+		fmt.Fprintln(os.Stderr, "  -debug             Enable debug logs")
+		fmt.Fprintln(os.Stderr, "  -split             Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64)")
+		fmt.Fprintln(os.Stderr, "  -run               Run the exporter (by default we dry-run)")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Environment variables:")
+		fmt.Fprintln(os.Stderr, "  TES_JSON_PATH      Same as -jsonPath")
+		fmt.Fprintln(os.Stderr, "  TES_OUTPUT_DIR     Same as -output")
+		fmt.Fprintln(os.Stderr, "  TES_SPLIT or TES_SPLIT_SPRITES  Enable sprite splitting like -split")
+		fmt.Fprintln(os.Stderr)
+		fmt.Fprintln(os.Stderr, "Examples:")
+		fmt.Fprintln(os.Stderr, "  tibia-sprites-exporter -human")
+		fmt.Fprintln(os.Stderr, "  tibia-sprites-exporter -jsonPath \"/path/to/Tibia/assets\" -output \"/tmp/exports\"")
+		fmt.Fprintln(os.Stderr, "  tibia-sprites-exporter -split -human")
+	}
+
+	flag.Bool("run", false, "Run the exporter (by default we dry-run)")
 	flagJsonPath = flag.String("jsonPath", "", "Path to catalog-content.json file")
 	flagOutputDir = flag.String("output", "", "Where to output exported sprite files (defaults to pwd + output)")
 	flagHumanOutput = flag.Bool("human", false, "Whether pretty print the logs")
 	flagDebugMode = flag.Bool("debug", false, "Whether enable debug logs")
 	flagSplitSprites = flag.Bool("split", false, "Split each 384x384 sheet into individual sprite PNGs named by sprite ID")
+
+	// If no arguments are provided, show help and exit instead of running straight away
+	if len(os.Args) == 1 {
+		flag.Usage()
+		os.Exit(0)
+	}
 
 	flag.Parse()
 }
