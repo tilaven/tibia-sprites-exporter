@@ -1,5 +1,12 @@
 # Tibia Sprites Exporter
 
+```asciiart
+ ______________       ___   ___
+/_  __/ __/ __/ _  __/ _ \ <  /
+ / / / _/_\ \  | |/ / // / / / 
+/_/ /___/___/  |___/\___(_)_/  
+```
+
 A small, fast CLI utility to extract Tibia client sprite sheets into PNG files and optionally split them into 
 per-sprite PNGs named by their sprite ID.
 
