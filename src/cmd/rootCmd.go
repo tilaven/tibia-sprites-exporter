@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"strings"
 
 	homedir "github.com/mitchellh/go-homedir"
 	"github.com/rs/zerolog"
@@ -37,6 +38,7 @@ func init() {
 	cobra.OnInitialize(initConfig)
 	cobra.OnInitialize(initDebugMode)
 	cobra.OnInitialize(initHumanOutput)
+	cobra.OnInitialize(initPathsFromViper)
 	cobra.OnInitialize(initCatalogContentJsonPathWithFilename)
 
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", "config file (default is $HOME/.tse.yaml)")
@@ -44,6 +46,12 @@ func init() {
 	rootCmd.PersistentFlags().BoolVar(&humanReadableLogs, "human", false, "enable human readable mode")
 	rootCmd.PersistentFlags().StringVarP(&CatalogContentJsonPath, "catalog", "c", defaultCatalogContentPath(), "path to the catalog.json file")
 	rootCmd.PersistentFlags().StringVarP(&OutputPath, "output", "o", defaultOutputPath(), "path where to save the extracted sprites")
+
+	// Bind persistent flags to Viper keys
+	_ = viper.BindPFlag("debug", rootCmd.PersistentFlags().Lookup("debug"))
+	_ = viper.BindPFlag("human", rootCmd.PersistentFlags().Lookup("human"))
+	_ = viper.BindPFlag("catalog", rootCmd.PersistentFlags().Lookup("catalog"))
+	_ = viper.BindPFlag("output", rootCmd.PersistentFlags().Lookup("output"))
 }
 
 func initConfig() {
@@ -51,7 +59,6 @@ func initConfig() {
 		// Use config file from the flag.
 		viper.SetConfigFile(cfgFile)
 	} else {
-		// Find home directory.
 		home, err := homedir.Dir()
 		if err != nil {
 			fmt.Println(err)
@@ -60,19 +67,22 @@ func initConfig() {
 
 		// Search config in home directory with name ".tse" (without extension).
 		viper.AddConfigPath(home)
+		viper.AddConfigPath(".")
+		viper.SetConfigType("yaml")
 		viper.SetConfigName(".tse")
 	}
 
+	viper.SetEnvPrefix("TSE")
+	viper.SetEnvKeyReplacer(strings.NewReplacer("-", "_", ".", "_"))
 	viper.AutomaticEnv() // read in environment variables that match
 
-	// If a config file is found, read it in.
 	if err := viper.ReadInConfig(); err == nil {
-		fmt.Println("Using config file:", viper.ConfigFileUsed())
+		log.Info().Msgf("Using config file:", viper.ConfigFileUsed())
 	}
 }
 
 func initDebugMode() {
-	if debugMode {
+	if viper.GetBool("debug") || debugMode {
 		zerolog.SetGlobalLevel(zerolog.DebugLevel)
 	} else {
 		zerolog.SetGlobalLevel(zerolog.InfoLevel)
@@ -80,8 +90,18 @@ func initDebugMode() {
 }
 
 func initHumanOutput() {
-	if humanReadableLogs {
+	if viper.GetBool("human") || humanReadableLogs {
 		log.Logger = log.Output(zerolog.ConsoleWriter{Out: os.Stderr})
+	}
+}
+
+func initPathsFromViper() {
+	// Sync our derived variables from Viper so config/env are respected
+	if v := viper.GetString("catalog"); v != "" {
+		CatalogContentJsonPath = app.ExpandPath(v)
+	}
+	if v := viper.GetString("output"); v != "" {
+		OutputPath = app.ExpandPath(v)
 	}
 }
 

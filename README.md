@@ -102,17 +102,37 @@ Compose grouped sprite strips based on the client `appearances` metadata.
 - Skips empty groups and reports how many groups were exported, skipped, or failed.
 
 ## Configuration and Defaults
-- **Global flags**
-    - `--config <path>` – Optional YAML configuration file (defaults to `~/.tse.yaml` if present). The file is read at startup for
-      future expansion, but command-line flags currently take precedence for day-to-day use.
-    - `--catalog, -c <path>` – Directory containing `catalog-content.json`. A direct path to the file also works.
-    - `--output, -o <path>` – Destination for extracted sheets (`./output/extracted` by default).
-    - `--debug` – Enable debug-level logging.
-    - `--human` – Render logs with timestamps and levels formatted for humans instead of JSON.
-- **Command flags**
-    - `split --splitOutput <path>` – Directory for individual sprite PNGs (`./output/split`).
-    - `group --splitOutput <path>` – Where `group` reads individual sprites from (`./output/split`).
-    - `group --groupedOutput <path>` – Destination for grouped composites (`./output/grouped`).
+This CLI now uses Viper for configuration. Settings can come from, in order of precedence: command-line flags > environment variables > config file > built-in defaults.
+
+- Config file
+  - By default, the tool looks for `~/.tse.yaml` (you can override with `--config`).
+  - Example `~/.tse.yaml`:
+    ```yaml
+    catalog: ~/Library/Application Support/CipSoft GmbH/Tibia/packages/Tibia.app/Contents/Resources/assets
+    output: ./output/extracted
+    debug: false
+    human: true
+    splitOutput: ./output/split
+    groupedOutput: ./output/grouped
+    ```
+- Environment variables
+  - Prefix: `TSE_`. Keys are uppercased and use underscores. Examples:
+    - `TSE_CATALOG=/path/to/assets`
+    - `TSE_OUTPUT=./output/extracted`
+    - `TSE_DEBUG=true`
+    - `TSE_HUMAN=true`
+    - `TSE_SPLITOUTPUT=./output/split`
+    - `TSE_GROUPEDOUTPUT=./output/grouped`
+- Global flags
+  - `--config <path>` – Optional YAML config file (defaults to `~/.tse.yaml` if present).
+  - `--catalog, -c <path>` – Directory containing `catalog-content.json`. A direct path to the file also works.
+  - `--output, -o <path>` – Destination for extracted sheets (`./output/extracted` by default).
+  - `--debug` – Enable debug-level logging.
+  - `--human` – Render logs with timestamps and levels formatted for humans instead of JSON.
+- Command flags
+  - `split --splitOutput <path>` – Directory for individual sprite PNGs (`./output/split`).
+  - `group --splitOutput <path>` – Where `group` reads individual sprites from (`./output/split`).
+  - `group --groupedOutput <path>` – Destination for grouped composites (`./output/grouped`).
 
 ## Output Layout
 ```
