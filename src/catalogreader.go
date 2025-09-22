@@ -8,6 +8,10 @@ import (
 	"github.com/rs/zerolog/log"
 )
 
+var (
+	AppearancesFileName string
+)
+
 func readCatalogContent(in string) {
 	var r *os.File
 	var err error
@@ -65,6 +69,8 @@ func readCatalogContent(in string) {
 			}
 
 			log.Debug().Msgf("Parsed element: %+v", elem)
+		} else if elem.Type == "appearances" && elem.File != "" {
+			AppearancesFileName = elem.File
 		} else {
 			log.Debug().Msgf("Skipping element: %+v", elem)
 		}

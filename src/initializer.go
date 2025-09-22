@@ -15,13 +15,16 @@ import (
 var (
 	CatalogContentJsonPath     string
 	CatalogContentJsonFullPath string
+	OsSeparator                string
 	OutputPath                 string
+	OutputSplitPath            string
 	SplitSprites               bool
 	flagJsonPath               *string
 	flagOutputDir              *string
 	flagHumanOutput            *bool
 	flagDebugMode              *bool
 	flagSplitSprites           *bool
+	flagGroupSplitSprites      *bool
 )
 
 func initExporter() {
@@ -36,6 +39,8 @@ func initExporter() {
 	initOutputDir()
 	validateOutputPath()
 	initSplitOption()
+	initGroupSplitOption()
+	validateGroupOutputPath()
 
 	log.Info().Msg("Initialized")
 	log.Debug().Msgf("catalog content path: %s", CatalogContentJsonPath)
@@ -64,6 +69,7 @@ func initFlags() {
 		fmt.Fprintln(os.Stderr, "  -human             Pretty-print logs for humans")
 		fmt.Fprintln(os.Stderr, "  -debug             Enable debug logs")
 		fmt.Fprintln(os.Stderr, "  -split             Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64)")
+		fmt.Fprintln(os.Stderr, "  -groupSplitSprites Group split sprites based on the apperances.dat file")
 		fmt.Fprintln(os.Stderr, "  -run               Run the exporter (by default we dry-run)")
 		fmt.Fprintln(os.Stderr)
 		fmt.Fprintln(os.Stderr, "Environment variables:")
@@ -83,6 +89,7 @@ func initFlags() {
 	flagHumanOutput = flag.Bool("human", false, "Whether pretty print the logs")
 	flagDebugMode = flag.Bool("debug", false, "Whether enable debug logs")
 	flagSplitSprites = flag.Bool("split", false, "Split each 384x384 sheet into individual sprite PNGs named by sprite ID")
+	flagGroupSplitSprites = flag.Bool("groupSplitSprites", false, "Group split sprites based on the apperances.dat file")
 
 	// If no arguments are provided, show help and exit instead of running straight away
 	if len(os.Args) == 1 {
@@ -195,8 +202,9 @@ func initOutputDir() {
 	if err != nil {
 		panic(err)
 	}
-	osSeparator := string(os.PathSeparator)
-	OutputPath = fmt.Sprint(filepath.Dir(ex), osSeparator, "output")
+	OsSeparator = string(os.PathSeparator)
+	OutputPath = fmt.Sprint(filepath.Dir(ex), OsSeparator, "output")
+	OutputSplitPath = fmt.Sprint(OutputPath, OsSeparator, "split")
 }
 
 func sanitizeCatalogContentPath(path string) string {
@@ -216,5 +224,30 @@ func initSplitOption() {
 	// Fallback to CLI flag
 	if flagSplitSprites != nil && *flagSplitSprites {
 		SplitSprites = true
+	}
+}
+
+func initGroupSplitOption() {
+	// Environment variables take precedence if present
+	if isEnvExist("TES_GROUP_SPLIT_SPRITES") {
+		*flagGroupSplitSprites = true
+		return
+	}
+	// Fallback to CLI flag
+	if flagGroupSplitSprites != nil && *flagGroupSplitSprites {
+		*flagGroupSplitSprites = true
+	}
+}
+
+func validateGroupOutputPath() {
+	if !*flagGroupSplitSprites {
+		return
+	}
+
+	if _, err := os.Stat(OutputPath); os.IsNotExist(err) {
+		if err := os.MkdirAll(OutputPath, 0o755); err != nil {
+			log.Err(err).Msgf("failed to create output path %s: %v", OutputPath, err)
+		}
+		log.Info().Msgf("created missing output path: %s", OutputPath)
 	}
 }
