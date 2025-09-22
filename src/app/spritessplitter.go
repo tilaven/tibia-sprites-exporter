@@ -8,6 +8,7 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
+	bar "github.com/schollz/progressbar/v3"
 )
 
 var spriteFilePattern = regexp.MustCompile(`^Sprites-(\d+)-(\d+)\.png$`)
@@ -18,6 +19,16 @@ func SplitSprites(extractedDir, splitOutputDir string) {
 		log.Panic().Err(err).Msgf("failed to read dir=%s", extractedDir)
 		return
 	}
+
+	progress := bar.NewOptions(
+		getTotalToSplit(entries),
+		bar.OptionSetDescription("Splitting sprites"),
+		bar.OptionShowCount(),
+		bar.OptionShowIts(),
+		bar.OptionSetItsString("files"),
+		bar.OptionThrottle(100),
+		bar.OptionClearOnFinish(),
+	)
 
 	for _, e := range entries {
 		if e.IsDir() {
@@ -33,6 +44,7 @@ func SplitSprites(extractedDir, splitOutputDir string) {
 		second, err2 := strconv.Atoi(m[2])
 		if err1 != nil || err2 != nil {
 			log.Error().Str("file", e.Name()).Msg("invalid numeric part in filename")
+			_ = progress.Add(1)
 			continue
 		}
 
@@ -40,12 +52,14 @@ func SplitSprites(extractedDir, splitOutputDir string) {
 		f, err := os.Open(path)
 		if err != nil {
 			log.Error().Str("file", path).Err(err).Msg("failed to open")
+			_ = progress.Add(1)
 			continue
 		}
 		img, err := png.Decode(f)
 		_ = f.Close()
 		if err != nil {
 			log.Error().Str("file", path).Err(err).Msg("failed to decode PNG")
+			_ = progress.Add(1)
 			continue
 		}
 
@@ -53,9 +67,10 @@ func SplitSprites(extractedDir, splitOutputDir string) {
 		err = SplitSpriteSheet(img, first, second, splitOutputDir)
 		if err != nil {
 			log.Error().Err(err).Msg("failed to split")
-			continue
 		}
+		_ = progress.Add(1)
 	}
+	_ = progress.Finish()
 }
 
 func GetAppearancesFileNameFromCatalogContent(in string) string {
@@ -88,4 +103,18 @@ func GetAppearancesFileNameFromCatalogContent(in string) string {
 
 	log.Panic().Msg("no appearances file found")
 	return "" // satisfy compiler
+}
+
+func getTotalToSplit(entries []os.DirEntry) int {
+	total := 0
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		if spriteFilePattern.MatchString(e.Name()) {
+			total++
+		}
+	}
+
+	return total
 }
