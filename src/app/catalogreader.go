@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"bufio"
@@ -12,7 +12,7 @@ var (
 	AppearancesFileName string
 )
 
-func readCatalogContent(in string) {
+func ReadCatalogContent(in string) {
 	var r *os.File
 	var err error
 	r, err = os.Open(in)

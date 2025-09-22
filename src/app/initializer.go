@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"flag"
@@ -25,10 +25,12 @@ var (
 	flagDebugMode              *bool
 	flagSplitSprites           *bool
 	flagGroupSplitSprites      *bool
+	flagsDefined               bool
 )
 
-func initExporter() {
-	initFlags()
+func InitExporter() {
+	// Ensure flags exist but do not parse here; Cobra will parse when used via CLI.
+	EnsureFlagsDefined()
 	initDebugMode()
 	initHumanOutput()
 
@@ -48,7 +50,11 @@ func initExporter() {
 	log.Debug().Msgf("split sprites: %v", SplitSprites)
 }
 
-func initFlags() {
+// EnsureFlagsDefined defines the standard flags exactly once, without parsing them.
+func EnsureFlagsDefined() {
+	if flagsDefined {
+		return
+	}
 	// Custom help/usage with ASCII art
 	flag.Usage = func() {
 		ascii := `
@@ -91,12 +97,16 @@ func initFlags() {
 	flagSplitSprites = flag.Bool("split", false, "Split each 384x384 sheet into individual sprite PNGs named by sprite ID")
 	flagGroupSplitSprites = flag.Bool("groupSplitSprites", false, "Group split sprites based on the apperances.dat file")
 
+	flagsDefined = true
+}
+
+func initFlags() {
+	EnsureFlagsDefined()
 	// If no arguments are provided, show help and exit instead of running straight away
 	if len(os.Args) == 1 {
 		flag.Usage()
 		os.Exit(0)
 	}
-
 	flag.Parse()
 }
 
@@ -235,19 +245,12 @@ func initGroupSplitOption() {
 	}
 	// Fallback to CLI flag
 	if flagGroupSplitSprites != nil && *flagGroupSplitSprites {
-		*flagGroupSplitSprites = true
+		// already true
 	}
 }
 
 func validateGroupOutputPath() {
-	if !*flagGroupSplitSprites {
-		return
-	}
-
-	if _, err := os.Stat(OutputPath); os.IsNotExist(err) {
-		if err := os.MkdirAll(OutputPath, 0o755); err != nil {
-			log.Err(err).Msgf("failed to create output path %s: %v", OutputPath, err)
-		}
-		log.Info().Msgf("created missing output path: %s", OutputPath)
-	}
+	// ensure group output directory exists
+	outDirPng := fmt.Sprint(OutputSplitPath, OsSeparator, "png")
+	_ = os.MkdirAll(outDirPng, 0o755)
 }

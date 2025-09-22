@@ -1,4 +1,4 @@
-package main
+package app
 
 import (
 	"errors"
@@ -16,7 +16,7 @@ type spriteInfo struct {
 	SpriteIDs []int
 }
 
-func groupSplitSprites() {
+func GroupSplitSprites() {
 	if !*flagGroupSplitSprites {
 		log.Printf("[skip] -groupsplitsprites=false")
 		return

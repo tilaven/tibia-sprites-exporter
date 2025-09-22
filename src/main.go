@@ -1,7 +1,7 @@
 package main
 
+import "github.com/simivar/tibia-sprites-exporter/src/cmd"
+
 func main() {
-	initExporter()
-	readCatalogContent(CatalogContentJsonFullPath)
-	groupSplitSprites()
+	cmd.Execute()
 }

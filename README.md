@@ -31,35 +31,35 @@ them into per-sprite PNGs named by their sprite ID.
 # Usage
 Basic example (pretty logs):
 ```shell
-tibia-sprites-exporter -human
+tse --human
 ```
 
 Point to a specific assets folder (the one containing catalog-content.json):
 ```shell
-tibia-sprites-exporter -jsonPath "/path/to/Tibia/assets"
+tse --jsonPath "/path/to/Tibia/assets"
 ```
 
 Choose a custom output directory:
 ```shell
-tibia-sprites-exporter -output "/tmp/exports"
+tse --output "/tmp/exports"
 ```
 
 Split each sheet into per-sprite PNGs named by ID:
 ```shell
-tibia-sprites-exporter -split
+tse --split
 ```
 
 Enable debug logs:
 ```shell
-tibia-sprites-exporter -debug -human
+tse --debug --human
 ```
 
 Flags
-- `-jsonPath` string    Path to the catalog-content.json file OR its containing directory.
-- `-output` string      Output directory (defaults to <executable_dir>/output).
-- `-human`              Pretty-print logs for humans.
-- `-debug`              Enable debug logs.
-- `-split`              Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64 tiles depending on sheet content).
+- `--jsonPath` string    Path to the catalog-content.json file OR its containing directory.
+- `--output` string      Output directory (defaults to <executable_dir>/output).
+- `--human`              Pretty-print logs for humans.
+- `--debug`              Enable debug logs.
+- `--split`              Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64 tiles depending on sheet content).
 
 Environment variables (override flags)
 - `TES_JSON_PATH`       Same as -jsonPath.
@@ -67,7 +67,7 @@ Environment variables (override flags)
 - `TES_SPLIT` or `TES_SPLIT_SPRITES`
 
 Defaults
-- If no `-jsonPath` (or `TES_JSON_PATH`) is provided the tool will look for catalog-content.json in the default path
+- If no `--jsonPath` (or `TES_JSON_PATH`) is provided the tool will look for catalog-content.json in the default path
 - Output defaults to a folder named output next to the executable
 
 How it works under the hood
