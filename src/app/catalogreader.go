@@ -5,12 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-
-	"github.com/rs/zerolog/log"
-)
-
-var (
-	AppearancesFileName string
 )
 
 type CatalogElem struct {
@@ -20,47 +14,6 @@ type CatalogElem struct {
 	FirstSpriteId int    `json:"firstspriteid"`
 	LastSpriteId  int    `json:"lastspriteid"`
 	Area          int    `json:"area"`
-}
-
-func ReadCatalogContent(in string) {
-	elems, errs := StreamCatalogContent(in)
-
-	for {
-		select {
-		case e, ok := <-elems:
-			if !ok {
-				elems = nil
-			} else {
-				// Decide what to do per element type here:
-				switch e.Type {
-				case "sprite":
-					log.Debug().Msgf("sprite range %d..%d file=%s", e.FirstSpriteId, e.LastSpriteId, e.File)
-					err := convertAsset(
-						CatalogContentJsonPath,
-						OutputPath,
-						e.File,
-						e.FirstSpriteId,
-						e.LastSpriteId,
-					)
-					if err != nil {
-						log.Err(err).Msg("failed to convert asset")
-					}
-				case "appearances":
-					AppearancesFileName = e.File // if you still want this side effect
-				default:
-					log.Debug().Msgf("skip type=%s file=%s", e.Type, e.File)
-				}
-			}
-		case err, ok := <-errs:
-			if ok && err != nil {
-				log.Err(err).Msg("stream error")
-			}
-			errs = nil
-		}
-		if elems == nil && errs == nil {
-			break
-		}
-	}
 }
 
 // StreamCatalogContent opens the JSON and streams elems as they are decoded.

@@ -16,6 +16,45 @@ import (
 	"golang.org/x/image/bmp"
 )
 
+func ConvertAssetsFromCatalogContent(assetsPath, contentJsonFullPath, outputPath string) {
+	elems, errs := StreamCatalogContent(contentJsonFullPath)
+
+	for {
+		select {
+		case e, ok := <-elems:
+			if !ok {
+				elems = nil
+			} else {
+				// Decide what to do per element type here:
+				switch e.Type {
+				case "sprite":
+					log.Debug().Msgf("sprite range %d..%d file=%s", e.FirstSpriteId, e.LastSpriteId, e.File)
+					err := convertAsset(
+						assetsPath,
+						outputPath,
+						e.File,
+						e.FirstSpriteId,
+						e.LastSpriteId,
+					)
+					if err != nil {
+						log.Err(err).Msg("failed to convert asset")
+					}
+				default:
+					log.Debug().Msgf("skip type=%s file=%s", e.Type, e.File)
+				}
+			}
+		case err, ok := <-errs:
+			if ok && err != nil {
+				log.Err(err).Msg("stream error")
+			}
+			errs = nil
+		}
+		if elems == nil && errs == nil {
+			break
+		}
+	}
+}
+
 // convertAsset:
 //  1. open "<assetsPath>/<compressedFilename>"
 //  2. skip CIP header (leading 0x00s, 4-byte constant, 7-bit length)
@@ -70,13 +109,6 @@ func convertAsset(assetsPath, outputPath, compressedFilename string, firstID, la
 	outPath := filepath.Join(outputPath, outName)
 	if err := writePNG(outPath, img); err != nil {
 		return fmt.Errorf("write png %q: %w", outPath, err)
-	}
-
-	// Optionally split into individual sprites named by ID
-	if SplitSprites {
-		if err := splitSpriteSheet(img, firstID, lastID, outputPath); err != nil {
-			return fmt.Errorf("split sprites: %w", err)
-		}
 	}
 
 	return nil
@@ -152,9 +184,7 @@ func writePNG(path string, img image.Image) error {
 	return png.Encode(out, img)
 }
 
-// splitSpriteSheet slices a 384x384 sheet into 32x32 or 64x64 tiles in
-// row-major order and writes each tile as a PNG named by its sprite ID.
-func splitSpriteSheet(img image.Image, firstID, lastID int, outputDir string) error {
+func SplitSpriteSheet(img image.Image, firstID, lastID int, outputDir string) error {
 	count := lastID - firstID + 1
 	if count <= 0 {
 		return nil
@@ -190,7 +220,7 @@ func splitSpriteSheet(img image.Image, firstID, lastID int, outputDir string) er
 			dst := image.NewRGBA(image.Rect(0, 0, tile, tile))
 			draw.Draw(dst, dst.Bounds(), img, sr.Min, draw.Src)
 
-			outPath := filepath.Join(outputDir, "split", fmt.Sprintf("%d.png", id))
+			outPath := filepath.Join(outputDir, fmt.Sprintf("%d.png", id))
 			if err := writePNG(outPath, dst); err != nil {
 				return fmt.Errorf("write sprite %d: %w", id, err)
 			}

@@ -16,16 +16,8 @@ type spriteInfo struct {
 	SpriteIDs []int
 }
 
-func GroupSplitSprites() {
-	if !*flagGroupSplitSprites {
-		log.Printf("[skip] -groupsplitsprites=false")
-		return
-	}
-
-	datPath := fmt.Sprint(
-		CatalogContentJsonPath, OsSeparator,
-		AppearancesFileName,
-	)
+func GroupSplitSprites(catalogContentJsonPath, appearancesFileName, splitSpitesDir, outputGroupedDir string) {
+	datPath := filepath.Join(catalogContentJsonPath, appearancesFileName)
 	if _, err := os.Stat(datPath); err != nil {
 		log.Fatal().Msgf("[read] dat file not found: %v", err)
 	}
@@ -39,18 +31,17 @@ func GroupSplitSprites() {
 	groups := scanSpriteInfos(data)
 	log.Debug().Msgf("[parse] found %d candidate groups (sprite-info blocks)", len(groups))
 
-	outDirPng := fmt.Sprint(OutputSplitPath, OsSeparator, "png")
-	if err := os.MkdirAll(outDirPng, 0o755); err != nil {
-		log.Fatal().Msgf("[fs] failed to create outDirPng=%s: %v", outDirPng, err)
+	if err := os.MkdirAll(outputGroupedDir, 0o755); err != nil {
+		log.Fatal().Msgf("[fs] failed to create outputGroupedDir=%s: %v", outputGroupedDir, err)
 	}
-	log.Debug().Msgf("[fs] outDirPng directory ready: %s", outDirPng)
+	log.Debug().Msgf("[fs] outputGroupedDir directory ready: %s", outputGroupedDir)
 
 	exported, skipped, failPNG := 0, 0, 0
 	for idx, g := range groups {
 		if len(g.SpriteIDs) == 0 {
 			skipped++
 			if idx < 5 {
-				log.Printf("[skip #%d] no sprite IDs", idx)
+				log.Debug().Msgf("[skip #%d] no sprite IDs", idx)
 			}
 			continue
 		}
@@ -60,11 +51,11 @@ func GroupSplitSprites() {
 		if first != last {
 			base = fmt.Sprintf("%d-%d", first, last)
 		}
-		outPNG := filepath.Join(outDirPng, base+".png")
+		outPNG := filepath.Join(outputGroupedDir, base+".png")
 
 		log.Debug().Int("group", idx).Int("sprites", len(g.SpriteIDs)).Msg("compose group")
 
-		img, err := composeGroupImage(g)
+		img, err := composeGroupImage(splitSpitesDir, g)
 		if err != nil {
 			failPNG++
 			log.Error().Msgf("[compose #%d] %v", idx, err)
@@ -83,7 +74,7 @@ func GroupSplitSprites() {
 		Int("exported", exported).
 		Int("skipped", skipped).
 		Int("pngErrors", failPNG).
-		Str("outDirPng", outDirPng).
+		Str("outputGroupedDir", outputGroupedDir).
 		Msg("Exporting groups finished")
 }
 
@@ -171,7 +162,7 @@ func readVarint(buf []byte, i int) (int, int, bool) {
 	}
 }
 
-func composeGroupImage(g spriteInfo) (image.Image, error) {
+func composeGroupImage(splitSpitesDir string, g spriteInfo) (image.Image, error) {
 	total := len(g.SpriteIDs)
 	if total == 0 {
 		return nil, errors.New("no sprite ids")
@@ -180,10 +171,10 @@ func composeGroupImage(g spriteInfo) (image.Image, error) {
 	tiles := make([]image.Image, total)
 	var tileW, tileH int
 	for idx := 0; idx < total; idx++ {
-		path := filepath.Join(OutputSplitPath, strconv.Itoa(g.SpriteIDs[idx])+".png")
+		path := filepath.Join(splitSpitesDir, strconv.Itoa(g.SpriteIDs[idx])+".png")
 		img, err := loadPNG(path)
 		if err != nil {
-			log.Error().Str("file", filepath.Base(path)).Msg("tile error")
+			log.Error().Str("file", path).Msg("tile error")
 			continue
 		}
 		if tileW == 0 {
