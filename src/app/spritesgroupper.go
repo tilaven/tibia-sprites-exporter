@@ -10,6 +10,7 @@ import (
 	"strconv"
 
 	"github.com/rs/zerolog/log"
+	bar "github.com/schollz/progressbar/v3"
 )
 
 type spriteInfo struct {
@@ -37,12 +38,22 @@ func GroupSplitSprites(catalogContentJsonPath, appearancesFileName, splitSpitesD
 	log.Debug().Msgf("[fs] outputGroupedDir directory ready: %s", outputGroupedDir)
 
 	exported, skipped, failPNG := 0, 0, 0
+	progress := bar.NewOptions(
+		len(groups),
+		bar.OptionSetDescription("Grouping sprites"),
+		bar.OptionShowCount(),
+		bar.OptionShowIts(),
+		bar.OptionSetItsString("groups"),
+		bar.OptionThrottle(100),
+		bar.OptionClearOnFinish(),
+	)
 	for idx, g := range groups {
 		if len(g.SpriteIDs) == 0 {
 			skipped++
 			if idx < 5 {
 				log.Debug().Msgf("[skip #%d] no sprite IDs", idx)
 			}
+			_ = progress.Add(1)
 			continue
 		}
 
@@ -59,16 +70,20 @@ func GroupSplitSprites(catalogContentJsonPath, appearancesFileName, splitSpitesD
 		if err != nil {
 			failPNG++
 			log.Error().Msgf("[compose #%d] %v", idx, err)
+			_ = progress.Add(1)
 			continue
 		}
 		if err := writePNG(outPNG, img); err != nil {
 			failPNG++
 			log.Error().Msgf("[writePNG #%d] %v", idx, err)
+			_ = progress.Add(1)
 			continue
 		}
 		log.Debug().Int("group", idx).Str("outPNG", outPNG).Msg("wrote grouped PNG")
 		exported++
+		_ = progress.Add(1)
 	}
+	_ = progress.Finish()
 
 	log.Info().
 		Int("exported", exported).
