@@ -29,8 +29,9 @@ var rootCmd = &cobra.Command{
 	Short: "Tibia Sprites Exporter is set of tools for exporting Tibia sprites from the client",
 	Long: `Tibia Sprites Exporter is set of tools for exporting Tibia sprites from the client.
 			It is small, fast and cross-platform.`,
-	Run: func(cmd *cobra.Command, args []string) {
-		log.Info().Msg("Tibia Sprites Exporter Root running")
+	RunE: func(cmd *cobra.Command, args []string) error {
+		// Show help by default when no subcommand is provided
+		return cmd.Help()
 	},
 }
 
