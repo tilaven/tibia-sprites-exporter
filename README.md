@@ -1,89 +1,131 @@
 # Tibia Sprites Exporter
 
-```asciiart
- ______________       ___   ___
-/_  __/ __/ __/ _  __/ _ \ <  /
- / / / _/_\ \  | |/ / // / / / 
-/_/ /___/___/  |___/\___(_)_/  
-```
-
 A small, fast, and cross-platform CLI utility to extract Tibia client sprite sheets into PNG files and optionally split 
-them into per-sprite PNGs named by their sprite ID.
+them into per-sprite PNGs named by their sprite ID. It gives you three focused workflows:
 
-# What this tool does:
-- Reads Tibia's catalog-content.json (the asset catalog used by the client).
-- For each entry of type "sprite", opens the referenced compressed asset file from the same assets directory.
-- Strips the CIP header, repairs the LZMA "alone" header, and decompresses to a BMP.
-- Converts the BMP to PNG and writes it as Sprites-<firstID>-<lastID>.png to the output directory.
-- Optional: splits each sheet into individual 32x32 or 64x64 tiles written to output/split/<spriteId>.png.
+1. **extract** sprite sheets from the installed client into lossless PNG files.
+2. **split** those sheets into individual sprite images, one file per sprite ID.
+3. **group** sprites back together according to the appearances metadata in the client, producing ready-to-use composites.
 
-# Status and compatibility note
-- Tested with the newest version of sprites as of 18.09 2 am CET.
-- Automated verification in CI pipelines will come.
+## Table of Contents
+- [Highlights](#highlights)
+- [Prerequisites](#prerequisites)
+- [Installation](#installation)
+- [Quick Start](#quick-start)
+- [Command Reference](#command-reference)
+    - [`extract`](#extract)
+    - [`split`](#split)
+    - [`group`](#group)
+- [Configuration and Defaults](#configuration-and-defaults)
+- [Output Layout](#output-layout)
+- [Contributing](#contributing)
+- [Acknowledgements](#acknowledgements)
+- 
+## Highlights
+- **Purpose-built exporter** for the current Tibia desktop client asset pipeline.
+- **Streaming JSON reader** that keeps memory usage flat while traversing `catalog-content.json`.
+- **Robust decompression** that fixes the client-specific CIP/LZMA headers before decoding the embedded BMPs.
+- **Progress-aware CLI** with human-friendly logging and progress bars for long-running operations.
+- **Composable commands** that let you automate full export pipelines or target just the step you need.
 
-# Getting started
-- Prebuilt binaries: When a tag starting with v is pushed, GitHub Actions builds artifacts for Windows, Linux, and macOS (see Releases/Actions artifacts in this repository).
-- Build from source:
-  1) Prerequisites: Go (see go.mod for the required version) and a C toolchain is NOT required (CGO is disabled).
-  2) Clone the repo and build:
-     `go build -trimpath -ldflags "-s -w" -o tibia-sprites-exporter ./src`
+## Prerequisites
+- Go **1.25** or newer (see `go.mod`).
+- Access to a Tibia installation with a valid `catalog-content.json` and asset package directory.
 
-# Usage
-Basic example (pretty logs):
-```shell
-tse --human
+## Installation
+
+### Build from source
+Clone the repository and build the CLI:
+
+```bash
+git clone https://github.com/tilaven/tibia-sprites-exporter.git
+cd tibia-sprites-exporter
+go build -trimpath -ldflags "-s -w" -o tibia-sprites-exporter ./src
 ```
 
-Point to a specific assets folder (the one containing catalog-content.json):
-```shell
-tse --jsonPath "/path/to/Tibia/assets"
+## Quick Start
+1. Ensure the Tibia client is installed locally.
+2. Locate the directory containing `catalog-content.json` or rely on the defaults.
+    - macOS: `~/Library/Application Support/CipSoft GmbH/Tibia/packages/Tibia.app/Contents/Resources/assets`
+    - Windows: `~/AppData/Local/Tibia/packages/Tibia/assets`
+    - Linux: `~/.local/share/CipSoft GmbH/Tibia/packages/Tibia/assets`
+3. Run the extractor (replace paths as needed):
+```bash
+# Extract sprite sheets to ./output/extracted
+./tibia-sprites-exporter extract
+
+# Split the generated sheets into per-sprite files
+./tibia-sprites-exporter split
+
+# Optionally compose grouped sprites based on appearances metadata
+./tibia-sprites-exporter group
 ```
 
-Choose a custom output directory:
-```shell
-tse --output "/tmp/exports"
+All commands support `--human` for console-friendly logs and `--debug` for verbose tracing.
+
+## Command Reference
+Each subcommand inherits global flags from the root command (`--catalog`, `--output`, `--human`, `--debug`, `--config`).
+
+### `extract`
+Extract compressed sprite sheets from the Tibia assets package.
+
+```bash
+./tibia-sprites-exporter extract [flags]
 ```
 
-Split each sheet into per-sprite PNGs named by ID:
-```shell
-tse --split
+- Streams `catalog-content.json` and processes each element whose `type` is `"sprite"`.
+- Reads the referenced compressed asset, strips the CIP header, patches the LZMA header, and decodes the contained BMP.
+- Writes PNG sheets named `Sprites-<firstID>-<lastID>.png` into the directory specified by `--output` (defaults to `./output/extracted`).
+- Displays a progress bar when the total sprite count can be determined.
+
+### `split`
+Split sheet PNGs created by `extract` into per-sprite tiles.
+
+```bash
+./tibia-sprites-exporter split --splitOutput ./output/split
 ```
 
-Enable debug logs:
-```shell
-tse --debug --human
+- Scans the extraction output for files matching `Sprites-*.png`.
+- Uses sprite IDs from the filename to name individual tiles (`<spriteID>.png`).
+- Automatically chooses 64×64 tiles for small sheets and 32×32 otherwise.
+- Emits progress updates and continues on errors, logging any issues with individual files.
+
+### `group`
+Compose grouped sprite strips based on the client `appearances` metadata.
+
+```bash
+./tibia-sprites-exporter group --splitOutput ./output/split --groupedOutput ./output/grouped
 ```
 
-Flags
-- `--jsonPath` string    Path to the catalog-content.json file OR its containing directory.
-- `--output` string      Output directory (defaults to <executable_dir>/output).
-- `--human`              Pretty-print logs for humans.
-- `--debug`              Enable debug logs.
-- `--split`              Split each 384x384 sheet into per-sprite PNGs (32x32 or 64x64 tiles depending on sheet content).
+- Locates the `appearances` file referenced in `catalog-content.json` and parses sprite group definitions.
+- Reads the per-sprite PNGs generated by `split` and assembles composite strips (one PNG per appearance group).
+- Skips empty groups and reports how many groups were exported, skipped, or failed.
 
-Environment variables (override flags)
-- `TES_JSON_PATH`       Same as -jsonPath.
-- `TES_OUTPUT_DIR`      Same as -output.
-- `TES_SPLIT` or `TES_SPLIT_SPRITES`
+## Configuration and Defaults
+- **Global flags**
+    - `--config <path>` – Optional YAML configuration file (defaults to `~/.tse.yaml` if present). The file is read at startup for
+      future expansion, but command-line flags currently take precedence for day-to-day use.
+    - `--catalog, -c <path>` – Directory containing `catalog-content.json`. A direct path to the file also works.
+    - `--output, -o <path>` – Destination for extracted sheets (`./output/extracted` by default).
+    - `--debug` – Enable debug-level logging.
+    - `--human` – Render logs with timestamps and levels formatted for humans instead of JSON.
+- **Command flags**
+    - `split --splitOutput <path>` – Directory for individual sprite PNGs (`./output/split`).
+    - `group --splitOutput <path>` – Where `group` reads individual sprites from (`./output/split`).
+    - `group --groupedOutput <path>` – Destination for grouped composites (`./output/grouped`).
 
-Defaults
-- If no `--jsonPath` (or `TES_JSON_PATH`) is provided the tool will look for catalog-content.json in the default path
-- Output defaults to a folder named output next to the executable
+## Output Layout
+```
+output/
+  extracted/      # Sprites-<first>-<last>.png generated by `extract`
+  split/          # <spriteID>.png tiles generated by `split`
+  grouped/        # Composite strips generated by `group`
+```
 
-How it works under the hood
-- Streaming JSON parser reads `catalog-content.json` for entries with `"type": "sprite"`.
-- Each referenced file is read from the assets directory, CIP header is skipped, and an LZMA reader is constructed with a corrected header.
-- The decompressed BMP is converted to PNG via golang.org/x/image/bmp and written to disk.
-- If -split (or TES_SPLIT/TES_SPLIT_SPRITES) is enabled, the 384x384 sheet is sliced row-major into 32x32 tiles (or 64x64 for small sets) and saved as output/split/<spriteId>.png.
+Each directory is created on demand if it does not already exist.
 
-Notes and tips
-- If you pass a directory to -jsonPath (recommended), the tool will automatically look for catalog-content.json inside it.
-- If a referenced asset file is missing, the tool logs it at debug level and continues.
-- On first run, the output directory is created automatically if it doesn't exist.
+## Contributing
+Bug reports, suggestions, and pull requests are welcome. Please include reproduction steps or sample assets (where legally shareable) so maintainers can validate fixes quickly.
 
-Roadmap
-- CI pipeline verification of outputs against known-good references.
-- Cross-platform discovery of default Tibia assets locations (Windows/Linux).
-
-Acknowledgments
-- Tibia is a trademark of CipSoft GmbH. This tool is a community utility and is not affiliated with or endorsed by CipSoft.
+## Acknowledgements
+Tibia is a trademark of CipSoft GmbH. This exporter is a community-driven effort and is not affiliated with or endorsed by CipSoft.
