@@ -45,7 +45,27 @@ jobs:
         env:
           CGO_ENABLED: 0
 
-      - name: Run tests
-        run: go test -v ./...
+      - name: Run tests with coverage
+        run: |
+          go test -coverprofile=coverage.out -covermode=atomic ./...
+          coverage_report=$(go tool cover -func=coverage.out)
+          echo "$coverage_report"
+          total_coverage=$(echo "$coverage_report" | awk '/^total:/ {print substr($3, 1, length($3)-1)}')
+          python - "$total_coverage" <<'PY'
+          import sys
+          
+          coverage = float(sys.argv[1])
+          minimum = 80.0
+          
+          if coverage < minimum:
+              print(f"Coverage {coverage:.2f}% is below required {minimum:.2f}%.", file=sys.stderr)
+              sys.exit(1)
+          PY
         env:
           CGO_ENABLED: 0
+
+      - name: Upload coverage artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: coverage-report
+          path: coverage.out
