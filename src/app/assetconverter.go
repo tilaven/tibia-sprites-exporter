@@ -12,11 +12,29 @@ import (
 	"path/filepath"
 
 	"github.com/rs/zerolog/log"
+	bar "github.com/schollz/progressbar/v3"
 	"github.com/ulikunitz/xz/lzma"
 	"golang.org/x/image/bmp"
 )
 
 func ConvertAssetsFromCatalogContent(assetsPath, contentJsonFullPath, outputPath string) {
+	total, err := CountSpriteEntries(contentJsonFullPath)
+	if err != nil {
+		log.Error().Err(err).Msg("failed to count sprites; progress bar may be inaccurate")
+	}
+	var progress *bar.ProgressBar
+	if total > 0 {
+		progress = bar.NewOptions(
+			total,
+			bar.OptionSetDescription("Extracting sprites"),
+			bar.OptionShowCount(),
+			bar.OptionShowIts(),
+			bar.OptionSetItsString("sprites"),
+			bar.OptionThrottle(100),
+			bar.OptionClearOnFinish(),
+		)
+	}
+
 	elems, errs := StreamCatalogContent(contentJsonFullPath)
 
 	for {
@@ -39,6 +57,9 @@ func ConvertAssetsFromCatalogContent(assetsPath, contentJsonFullPath, outputPath
 					if err != nil {
 						log.Err(err).Msg("failed to convert asset")
 					}
+					if progress != nil {
+						_ = progress.Add(1)
+					}
 				default:
 					log.Debug().Msgf("skip type=%s file=%s", e.Type, e.File)
 				}
@@ -52,6 +73,9 @@ func ConvertAssetsFromCatalogContent(assetsPath, contentJsonFullPath, outputPath
 		if elems == nil && errs == nil {
 			break
 		}
+	}
+	if progress != nil {
+		_ = progress.Finish()
 	}
 }
 

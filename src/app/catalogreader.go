@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"regexp"
 )
 
 type CatalogElem struct {
@@ -64,4 +65,19 @@ func StreamCatalogContent(path string) (<-chan CatalogElem, <-chan error) {
 	}()
 
 	return out, errs
+}
+
+// CountSpriteEntries counts occurrences of the pattern "type":"sprite"
+// without decoding JSON, by scanning the file as bytes. This is fast and
+// sufficient for progress estimation. It tolerates arbitrary whitespace
+// around the colon.
+var spriteTypeRe = regexp.MustCompile(`"type"\s*:\s*"sprite"`)
+
+func CountSpriteEntries(path string) (int, error) {
+	b, err := os.ReadFile(path)
+	if err != nil {
+		return 0, err
+	}
+	matches := spriteTypeRe.FindAllIndex(b, -1)
+	return len(matches), nil
 }
