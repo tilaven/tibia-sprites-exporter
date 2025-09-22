@@ -7,6 +7,11 @@ on:
       - go.mod
       - go.sum
       - '.github/workflows/**'
+  push:
+    branches:
+      - main
+    tags:
+      - '*'
 
 jobs:
   lint-test:
