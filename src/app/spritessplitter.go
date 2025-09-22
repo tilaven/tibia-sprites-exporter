@@ -16,12 +16,22 @@ var spriteFilePattern = regexp.MustCompile(`^Sprites-(\d+)-(\d+)\.png$`)
 func SplitSprites(extractedDir, splitOutputDir string) {
 	entries, err := os.ReadDir(extractedDir)
 	if err != nil {
-		log.Panic().Err(err).Msgf("failed to read dir=%s", extractedDir)
+		log.Err(err).
+			Str("extractedDir", extractedDir).
+			Msg("Failed to read directory. Did you run the extract command?")
+		return
+	}
+
+	total := getTotalToSplit(entries)
+	if total == 0 {
+		log.Warn().
+			Str("extractedDir", extractedDir).
+			Msg("No sprites found to split. Did you run the extract command?")
 		return
 	}
 
 	progress := bar.NewOptions(
-		getTotalToSplit(entries),
+		total,
 		bar.OptionSetDescription("Splitting sprites"),
 		bar.OptionShowCount(),
 		bar.OptionShowIts(),

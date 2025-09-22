@@ -85,6 +85,12 @@ func GroupSplitSprites(catalogContentJsonPath, appearancesFileName, splitSpitesD
 	}
 	_ = progress.Finish()
 
+	if failPNG > 0 {
+		log.Warn().
+			Int("pngErrors", failPNG).
+			Msg("Some PNGs could not be composed. Did you run the extract and split command?")
+	}
+
 	log.Info().
 		Int("exported", exported).
 		Int("skipped", skipped).
