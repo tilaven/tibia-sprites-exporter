@@ -1,5 +1,9 @@
 # Tibia Sprites Exporter
 
+<p align='center'>
+  <img src='https://github.com/tilaven/tibia-sprites-exporter/blob/main/assets/logo.png?raw=true' width=100 />
+</p>
+
 A small, fast, and cross-platform CLI utility to extract Tibia client sprite sheets into PNG files and optionally split 
 them into per-sprite PNGs named by their sprite ID. It gives you three focused workflows:
 
