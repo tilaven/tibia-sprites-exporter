@@ -54,6 +54,70 @@ func TestScanSpriteInfosExtractsGroups(t *testing.T) {
 	}
 }
 
+func TestGroupSplitSpritesExportsGroupsAndLogsSummary(t *testing.T) {
+	buf, restore := captureLogs(t)
+	defer restore()
+
+	tmp := t.TempDir()
+	catalogDir := filepath.Join(tmp, "catalog")
+	splitDir := filepath.Join(tmp, "split")
+	outputDir := filepath.Join(tmp, "grouped")
+
+	if err := os.MkdirAll(catalogDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll catalogDir: %v", err)
+	}
+	if err := os.MkdirAll(splitDir, 0o755); err != nil {
+		t.Fatalf("MkdirAll splitDir: %v", err)
+	}
+
+	blockSkip := buildSpriteInfoBlock(32, 32, 1, 1)
+	blockGood := buildSpriteInfoBlock(32, 32, 1, 1, 1, 2)
+	blockMissing := buildSpriteInfoBlock(32, 32, 1, 1, 99)
+	dat := append(blockSkip, blockGood...)
+	dat = append(dat, blockMissing...)
+	dat = append(dat, 0x00)
+
+	datPath := filepath.Join(catalogDir, "appearances.dat")
+	if err := os.WriteFile(datPath, dat, 0o644); err != nil {
+		t.Fatalf("WriteFile dat: %v", err)
+	}
+
+	writeSolidTile(t, splitDir, 1, color.NRGBA{R: 255, A: 255}, 32)
+	writeSolidTile(t, splitDir, 2, color.NRGBA{G: 255, A: 255}, 32)
+
+	GroupSplitSprites(catalogDir, "appearances.dat", splitDir, outputDir)
+
+	outPath := filepath.Join(outputDir, "1-2.png")
+	if _, err := os.Stat(outPath); err != nil {
+		t.Fatalf("grouped PNG not written: %v", err)
+	}
+
+	f, err := os.Open(outPath)
+	if err != nil {
+		t.Fatalf("Open grouped PNG: %v", err)
+	}
+	defer f.Close()
+
+	img, err := png.Decode(f)
+	if err != nil {
+		t.Fatalf("Decode grouped PNG: %v", err)
+	}
+	bounds := img.Bounds()
+	if bounds.Dx() != 64 || bounds.Dy() != 32 {
+		t.Fatalf("grouped PNG bounds = %v, want width 64 height 32", bounds)
+	}
+
+	logs := buf.String()
+	for _, want := range []string{"\"exported\":1", "\"skipped\":1", "\"pngErrors\":1"} {
+		if !strings.Contains(logs, want) {
+			t.Fatalf("log output missing %s: %s", want, logs)
+		}
+	}
+	if !strings.Contains(logs, "\"message\":\"Exporting groups finished\"") {
+		t.Fatalf("summary log missing message: %s", logs)
+	}
+}
+
 func TestComposeGroupImageStitchesTilesHorizontally(t *testing.T) {
 	dir := t.TempDir()
 	ids := []int{10, 11, 12}
