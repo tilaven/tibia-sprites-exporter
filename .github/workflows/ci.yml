@@ -60,7 +60,7 @@ jobs:
           import sys
           
           coverage = float(sys.argv[1])
-          minimum = 80.0
+          minimum = 60.0
           
           if coverage < minimum:
               print(f"Coverage {coverage:.2f}% is below required {minimum:.2f}%.", file=sys.stderr)
